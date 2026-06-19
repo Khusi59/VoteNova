@@ -1,0 +1,23 @@
+# ============================================================
+#  VoteNova — Apache Configuration
+#  Kept minimal so it never causes a 500 error on XAMPP.
+#  mod_rewrite is OFF here — all PHP files are called directly
+#  (e.g. /admin/api.php) which is simpler and avoids the most
+#  common XAMPP misconfiguration issue.
+# ============================================================
+
+Options -Indexes
+ServerSignature Off
+
+# ── Security headers (safe — these never cause 500 errors) ───
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
+# ── Block direct access to PHP config files ──────────────────
+<FilesMatch "^(db|app)\.php$">
+    Require all denied
+</FilesMatch>
+
+
