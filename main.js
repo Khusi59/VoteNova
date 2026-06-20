@@ -1,14 +1,7 @@
-
 let currentVoter = null;   // { id, name, email } when logged in, else null
 let currentAdmin = null;   // { username } when logged in, else null
 
-// ── Demo candidate data (used only for the public Candidates/Results
-//    preview pages until real elections exist in the database) ──────────
-const CANDIDATES = [
-  { initials: 'JK', name: 'James Kim', party: 'Student Progress Party', tagline: 'Affordable housing & mental health resources for every student.', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160&h=160&fit=crop&crop=faces' },
-  { initials: 'MA', name: 'Maria Alvarez', party: 'Independent', tagline: 'Transparent governance and a stronger student voice on curriculum.', photo: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=160&h=160&fit=crop&crop=faces' },
-  { initials: 'TN', name: 'Tom Nakamura', party: 'Future Forward', tagline: 'Technology-first infrastructure and international partnerships.', photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&h=160&fit=crop&crop=faces' },
-];
+
 const RESULTS = [
   { name: 'Sarah Reynolds', party: 'Progressive Alliance', votes: 4197, pct: 51.0, color: '#6C47FF' },
   { name: 'David Okafor', party: 'United Community', votes: 2803, pct: 34.1, color: '#3D2FA0' },
@@ -49,6 +42,7 @@ function showPage(id) {
   // Lazy-load real data when entering certain pages
   if (id === 'dashboard') loadDashboard();
   if (id === 'admin') loadAdminElections();
+  if (id === 'candidate') buildCandidateGrid();
 }
 
 function updateNav(id) {
@@ -430,29 +424,59 @@ function closeAllModals() {
 // ════════════════════════════════════════════════════════════════════════
 //  CANDIDATES PAGE (public preview — demo data)
 // ════════════════════════════════════════════════════════════════════════
-function buildCandidateGrid() {
+async function buildCandidateGrid() {
   const grid = document.getElementById('candidate-grid');
   if (!grid) return;
-  const bios = [
-    'Third-year Politics student and current VP of Student Welfare. James has campaigned on expanding mental health services and reducing on-campus housing costs by 15% through partnerships with local councils.',
-    'Sociology graduate student and founder of the Campus Equity Project. Maria is running on a platform of greater curriculum diversity, transparent budget reporting, and weekly open office hours for all students.',
-    'Computer Science PhD candidate and organiser of the annual TechFest. Tom proposes a full digital transformation of student services and new international exchange agreements with 12 universities.'
-  ];
-  grid.innerHTML = CANDIDATES.map((c, i) => `
-    <div class="candidate-card">
-      <div class="candidate-card-top"></div>
-      <div class="candidate-card-body">
-        <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:1rem;">
-          <div class="candidate-photo-wrap" style="background:none;overflow:hidden;">
-            <img src="${c.photo}" alt="${c.name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.style.display='none'" />
+
+  grid.innerHTML = `<p style="color:var(--ink-muted);grid-column:1/-1;text-align:center;padding:2rem;">Loading candidates…</p>`;
+
+  try {
+    const res = await fetch('api/elections.php?action=all_candidates');
+    const data = await res.json();
+
+    if (!data.ok) {
+      grid.innerHTML = `<p style="color:var(--coral);grid-column:1/-1;text-align:center;padding:2rem;">Could not load candidates.</p>`;
+      return;
+    }
+
+    const candidates = data.data;
+
+    if (candidates.length === 0) {
+      grid.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:3rem 1.5rem;background:var(--bg);border:1.5px dashed var(--border);border-radius:var(--radius-lg);">
+          <div style="font-size:2rem;margin-bottom:.75rem;">🗳️</div>
+          <div style="font-weight:700;font-size:1.05rem;color:var(--ink);margin-bottom:.4rem;">No candidates yet</div>
+          <p style="font-size:.875rem;color:var(--ink-muted);">No elections currently have candidates added. Check back once the admin sets up an election.</p>
+        </div>`;
+      return;
+    }
+
+    grid.innerHTML = candidates.map(c => {
+      const initials = c.full_name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
+      const photoTag = c.photo_url
+        ? `<img src="${c.photo_url}" alt="${escapeHtml(c.full_name)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div style="display:none;width:100%;height:100%;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;color:var(--indigo);background:var(--indigo-light);border-radius:50%;">${initials}</div>`
+        : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;color:var(--indigo);background:var(--indigo-light);border-radius:50%;">${initials}</div>`;
+      return `
+        <div class="candidate-card">
+          <div class="candidate-card-top"></div>
+          <div class="candidate-card-body">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:1rem;">
+              <div class="candidate-photo-wrap" style="background:none;overflow:hidden;">
+                ${photoTag}
+              </div>
+              <span class="tag tag-indigo">${escapeHtml(c.party || 'Independent')}</span>
+            </div>
+            <h3 style="font-weight:700;font-size:1.05rem;margin-bottom:.25rem;color:var(--ink);">${escapeHtml(c.full_name)}</h3>
+            <div style="font-size:.75rem;color:var(--violet);font-weight:600;margin-bottom:.5rem;">${escapeHtml(c.election_title)}</div>
+            ${c.tagline ? `<p style="font-size:.85rem;color:var(--ink);font-style:italic;margin-bottom:.5rem;">"${escapeHtml(c.tagline)}"</p>` : ''}
+            <p style="font-size:.825rem;color:var(--ink-muted);line-height:1.65;">${escapeHtml(c.bio || '')}</p>
           </div>
-          <span class="tag tag-indigo">${c.party}</span>
         </div>
-        <h3 style="font-weight:700;font-size:1.05rem;margin-bottom:.25rem;color:var(--ink);">${c.name}</h3>
-        <p style="font-size:.825rem;color:var(--ink-muted);line-height:1.65;">${bios[i]}</p>
-      </div>
-    </div>
-  `).join('');
+      `;
+    }).join('');
+  } catch (e) {
+    grid.innerHTML = `<p style="color:var(--coral);grid-column:1/-1;text-align:center;padding:2rem;">Could not reach the server. Is Apache running in XAMPP?</p>`;
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════

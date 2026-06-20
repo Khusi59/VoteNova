@@ -10,16 +10,56 @@ header('Content-Type: application/json');
 $action = $_GET['action'] ?? null;
 $id     = isset($_GET['id']) ? (int)$_GET['id'] : null;
 
-if ($action === 'vote')           { castVote();             exit; }
-if ($action === 'results')        { getResults($id);        exit; }
-if ($action === 'receipt')        { verifyReceipt();         exit; }
-if ($action === 'all_for_voter')  { listForVoterDashboard();  exit; }
-if ($id)                          { getElection($id);        exit; }
+if ($action === 'vote') {
+    castVote();
+    exit;
+}
+if ($action === 'results') {
+    getResults($id);
+    exit;
+}
+if ($action === 'receipt') {
+    verifyReceipt();
+    exit;
+}
+if ($action === 'all_for_voter') {
+    listForVoterDashboard();
+    exit;
+}
+if ($action === 'all_candidates') {
+    listAllCandidates();
+    exit;
+}
+if ($id) {
+    getElection($id);
+    exit;
+}
 
 listElections();
 
+function listAllCandidates(): void
+{
+    $db   = getDB();
+    $stmt = $db->query(
+        "SELECT c.id, c.full_name, c.party, c.tagline, c.bio, c.photo, c.platform,
+                e.id AS election_id, e.title AS election_title
+         FROM candidates c
+         JOIN elections e ON e.id = c.election_id
+         WHERE c.status = 'approved'
+           AND e.is_open = 1
+           AND e.opens_at <= NOW() AND e.closes_at >= NOW()
+         ORDER BY e.closes_at ASC, c.id ASC"
+    );
+    $rows = $stmt->fetchAll();
+    foreach ($rows as &$r) {
+        $r['photo_url'] = $r['photo'] ? (UPLOAD_URL . $r['photo']) : null;
+        $r['platform']  = json_decode($r['platform'] ?? '[]', true);
+    }
+    jsonOk($rows);
+}
 // ── List all currently open (live) elections — public ────────
-function listElections(): void {
+function listElections(): void
+{
     $db   = getDB();
     $stmt = $db->query(
         "SELECT id, title, description, opens_at, closes_at,
@@ -33,7 +73,8 @@ function listElections(): void {
 
 // ── Elections list for a logged-in voter's dashboard ──────────
 // Includes whether THIS voter has already voted in each one.
-function listForVoterDashboard(): void {
+function listForVoterDashboard(): void
+{
     requireVoter();
     $voterId = (int)$_SESSION['voter_id'];
     $db = getDB();
@@ -58,7 +99,8 @@ function listForVoterDashboard(): void {
 }
 
 // ── Single election + approved candidates ────────────────────
-function getElection(int $id): void {
+function getElection(int $id): void
+{
     $db   = getDB();
     $stmt = $db->prepare(
         "SELECT id, title, description, opens_at, closes_at,
@@ -94,7 +136,8 @@ function getElection(int $id): void {
 }
 
 // ── Cast a vote — voter must be logged in ──────────────────────
-function castVote(): void {
+function castVote(): void
+{
     requireVoter();
     $b           = body();
     $electionId  = (int)($b['election_id']  ?? 0);
@@ -133,7 +176,8 @@ function castVote(): void {
 }
 
 // ── Get results (closed election OR admin made them public) ──
-function getResults(?int $id): void {
+function getResults(?int $id): void
+{
     if (!$id) jsonError('Election id required.');
     $db   = getDB();
     $eStmt = $db->prepare(
@@ -171,7 +215,8 @@ function getResults(?int $id): void {
 }
 
 // ── List all elections with public results — for Results page ─
-function verifyReceipt(): void {
+function verifyReceipt(): void
+{
     $code = strtoupper(trim($_GET['code'] ?? ''));
     $code = str_replace('VN-', '', $code);
     if (!$code) jsonError('Receipt code required.');
